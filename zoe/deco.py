@@ -37,9 +37,13 @@ class RabbitMQClient:
         self._channel.start_consuming()
 
     def send(self, msg):
-        if self._channel:
-            self._channel.basic_publish(exchange = self.EXCHANGE, routing_key = self.ROUTING_KEY, body = msg)
-
+        if not self._channel:
+            return
+        if isinstance(msg, dict):
+            msg = json.dumps(msg)
+        elif not isinstance(msg, str):
+            msg = str(msg)
+        self._channel.basic_publish(exchange = self.EXCHANGE, routing_key = self.ROUTING_KEY, body = msg)
 
 class DecoratedAgent:
     def __init__(self, name, agent):
@@ -64,10 +68,6 @@ class DecoratedAgent:
         """ replaces a dict's contents with the ones in another dict """
         old.clear()
         old.update(new)
-
-    def tojson(self, dic):
-        """ guess what """
-        return json.dumps(dic)
 
     def fromjson(self, st):
         """ guess what """
@@ -95,6 +95,8 @@ class DecoratedAgent:
         if (len(incoming) == 0):
             return
         inner = self.innerintent(incoming)
+        if not inner:
+            return
         intentName = inner['intent']
         chosen = None
         for c in self._candidates:
@@ -110,7 +112,7 @@ class DecoratedAgent:
         if not ret:
             return
         self.substitute(inner, ret)
-        self.sendbus(self.tojson(incoming))
+        self.sendbus(incoming)
 
 class Intent:
     def __init__(self, name):
