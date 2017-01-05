@@ -16,7 +16,7 @@ logging.basicConfig(level = logging.INFO)
 class RabbitMQClient:
     QUEUE = 'zoemessages'
     ROUTING_KEY = 'zoemessages'
-    EXCHANGE = ''
+    EXCHANGE = 'zoeexchange'
 
     def __init__(self, url, handler):
         self._url = url
@@ -27,8 +27,13 @@ class RabbitMQClient:
         params.socket_timeout = 5
         self._connection = pika.BlockingConnection(params)
         self._channel = self._connection.channel()
-        self._channel.queue_declare(queue = self.QUEUE)
-        self._channel.basic_consume(self._handler, queue = self.QUEUE, no_ack = True)
+        self._channel.exchange_declare(exchange = self.EXCHANGE, type = 'fanout')
+
+        result = self._channel.queue_declare(exclusive = True)
+        self._queue_name = result.method.queue
+        self._channel.queue_bind(exchange = self.EXCHANGE, queue = self._queue_name)
+
+        self._channel.basic_consume(self._handler, queue = self._queue_name, no_ack = True)
         self._channel.start_consuming()
 
     def send(self, msg):
@@ -49,6 +54,7 @@ class DecoratedAgent:
             if hasattr(k, "__zoe__intent__any__"):
                 self._candidates.append(k)
         self._listener = RabbitMQClient(url, self.incoming)
+        agent.send = self._listener.send
         self._listener.run()
 
     def sendbus(self, json):
