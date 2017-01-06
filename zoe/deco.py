@@ -11,7 +11,7 @@ import sys
 import os
 
 url = os.environ.get('RABBITMQ_URL')
-logging.basicConfig(level = logging.INFO)
+logging.getLogger("pika").setLevel(logging.WARNING)
 
 class RabbitMQClient:
     QUEUE = 'zoemessages'
