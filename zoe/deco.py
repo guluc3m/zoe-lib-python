@@ -73,7 +73,7 @@ class DecoratedAgent:
         """ guess what """
         return json.loads(st)
 
-    def innerintent(self, intent):
+    def innerintent(intent):
         """ finds the innermost intent to solve.
             Traverses the intent tree, accumulating all objects,
             and returns the first one that is actually an intent.
@@ -94,7 +94,7 @@ class DecoratedAgent:
         incoming = self.fromjson(body.decode('utf-8'))
         if (len(incoming) == 0):
             return
-        inner = self.innerintent(incoming)
+        inner = DecoratedAgent.innerintent(incoming)
         if not inner:
             return
         intentName = inner['intent']
@@ -108,10 +108,14 @@ class DecoratedAgent:
                 break
         if not chosen:
             return
-        ret = chosen(inner)
+        if hasattr(c, '__zoe__intent__raw__'):
+            finalIntent = incoming
+        else:
+            finalIntent = inner
+        ret = chosen(finalIntent)
         if not ret:
             return
-        self.substitute(inner, ret)
+        self.substitute(finalIntent, ret)
         self.sendbus(incoming)
 
 class Intent:
@@ -128,6 +132,14 @@ class Any:
 
     def __call__(self, f):
         setattr(f, '__zoe__intent__any__', True)
+        return f
+
+class Raw:
+    def __init__(self):
+        pass
+
+    def __call__(self, f):
+        setattr(f, '__zoe__intent__raw__', True)
         return f
 
 class Agent:
