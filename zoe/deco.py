@@ -81,9 +81,14 @@ class DecoratedAgent:
         """
         a = []
         def traverse(intent, acc):
-            if 'payloads' in intent:
-                for p in intent['payloads']:
-                    traverse(p, acc)
+            keys = sorted(intent)
+            for key in keys:
+                value = intent[key]
+                if isinstance(value, dict):
+                    traverse(value, acc)
+                elif isinstance(value, list):
+                    for p in value:
+                        traverse(p, acc)
             acc.append(intent)
         traverse(intent, a)
         for i in a:
