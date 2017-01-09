@@ -45,107 +45,147 @@ class RabbitMQClient:
             msg = str(msg)
         self._channel.basic_publish(exchange = self.EXCHANGE, routing_key = self.ROUTING_KEY, body = msg)
 
-class DecoratedAgent:
-    def __init__(self, name, agent):
-        self._name = name
-        self._agent = agent
-        self._logger = logging.getLogger(name)
-        self._candidates = []
-        for m in dir(agent):
-            k = getattr(agent, m)
-            if hasattr(k, "__zoe__intent__"):
-                self._candidates.append(k)
-            if hasattr(k, "__zoe__intent__any__"):
-                self._candidates.append(k)
-        self._listener = RabbitMQClient(url, self.incoming)
-        agent.send = self._listener.send
-        self._listener.run()
-
-    def sendbus(self, json):
-        self._listener.send(json)
-
-    def substitute(self, old, new):
-        """ replaces a dict's contents with the ones in another dict """
-        old.clear()
-        old.update(new)
-
-    def fromjson(self, st):
-        """ guess what """
-        return json.loads(st)
-
-    def innerintent(intent):
+class IntentTools:
+    def lookup(intent):
         """ finds the innermost intent to solve.
             Traverses the intent tree, accumulating all objects,
             and returns the first one that is actually an intent.
             Yes, this can be optimized, but who cares.
         """
         a = []
-        def traverse(intent, acc):
-            keys = sorted(intent)
-            for key in keys:
-                value = intent[key]
-                if isinstance(value, dict):
-                    traverse(value, acc)
-                elif isinstance(value, list):
-                    for p in value:
-                        traverse(p, acc)
-            acc.append(intent)
+        def traverse(intent, acc, trycatch = None):
+            if 'try' in intent:
+                traverse(intent['try'], acc, intent)
+            else:
+                keys = sorted(intent)
+                for key in keys:
+                    value = intent[key]
+                    if isinstance(value, dict):
+                        traverse(value, acc, trycatch)
+                    elif isinstance(value, list):
+                        for p in value:
+                            traverse(p, acc, trycatch)
+            acc.append((intent, trycatch))
         traverse(intent, a)
-        for i in a:
-            if 'intent' in i:
-                return i
+        for (i, t) in a:
+            if 'intent' in i or 'try' in i:
+                return (i, t)
+
+    def inner_intent(intent):
+        chosen, trycatch = IntentTools.lookup(intent)
+        return chosen
+
+    def substitute(old, new):
+        """ replaces a dict's contents with the ones in another dict """
+        old.clear()
+        old.update(new)
+
+class DecoratedAgent:
+    def __init__(self, name, agent, listener = None):
+        self._name = name
+        self._agent = agent
+        self._logger = logging.getLogger(name)
+        self._candidates = []
+        for m in dir(agent):
+            k = getattr(agent, m)
+            if hasattr(k, IntentDecorations.ATTR_FILTER):
+                self._candidates.append(k)
+        if (listener):
+            self._listener = listener
+        else:
+            self._listener = RabbitMQClient(url, self.incoming)
+        agent.send = self._listener.send
+        self._listener.run()
 
     def incoming(self, ch, method, properties, body):
-        incoming = self.fromjson(body.decode('utf-8'))
+        incoming = json.loads(body.decode('utf-8'))
         if (len(incoming) == 0):
             return
-        inner = DecoratedAgent.innerintent(incoming)
-        if not inner:
+        result, error = self.dispatch(incoming)
+        if not result:
             return
-        intentName = inner['intent']
-        chosen = None
-        for c in self._candidates:
-            if hasattr(c, '__zoe__intent__') and c.__zoe__intent__ == intentName:
-                chosen = c
-                break
-            if hasattr(c, '__zoe__intent__any__'):
-                chosen = c
-                break
-        if not chosen:
-            return
-        if hasattr(c, '__zoe__intent__raw__'):
-            finalIntent = incoming
+        self._listener.send(json.dumps(result))
+
+    def dispatch(self, original):
+        incoming = dict(original)
+        intent, method = self.find_method(incoming)
+        if not method:
+            return None, 'ignored'
+        result = method(intent)
+        if not result:
+            return None, 'consumed'
+        IntentTools.substitute(intent, result)
+        return incoming, None
+
+    def find_method(self, incoming):
+        methods = []
+        for method in self._candidates:
+            selector = IntentDecorations.get_selector(method)
+            filt = IntentDecorations.get_filter(method)
+            result = selector(incoming)
+            if not filt(result):
+                return None, None
+            if result and len(result) > 0:
+                methods.append(method)
+            if len(methods) == 0:
+                return None, None
+            if len(methods) > 1:
+                print('Too many methods')
+                return None, None
+        return result, methods[0]
+
+
+class IntentDecorations:
+    ATTR_SELECTOR = '__zoe__intent__selector__'
+    ATTR_FILTER = '__zoe__intent__filter__'
+    def set_selector(f, selector):
+        setattr(f, IntentDecorations.ATTR_SELECTOR, selector)
+
+    def get_selector(method):
+        if hasattr(method, IntentDecorations.ATTR_SELECTOR):
+            return getattr(method, IntentDecorations.ATTR_SELECTOR)
         else:
-            finalIntent = inner
-        ret = chosen(finalIntent)
-        if not ret:
-            return
-        self.substitute(finalIntent, ret)
-        self.sendbus(incoming)
+            return Inner.SELECTOR
 
-class Intent:
+    def set_filter(f, filter):
+        setattr(f, IntentDecorations.ATTR_FILTER, filter)
+
+    def get_filter(method):
+        return getattr(method, IntentDecorations.ATTR_FILTER)
+
+
+class Selector:
+    def __init__(self, lam):
+        self._lam = lam
+    def __call__(self, f):
+        IntentDecorations.set_selector(f, self._lam)
+        return f
+
+class Filter:
+    def __init__(self, lam):
+        self._lam = lam
+    def __call__(self, f):
+        IntentDecorations.set_filter(f, self._lam)
+        return f
+
+class Inner(Selector):
+    SELECTOR = lambda intent: IntentTools.inner_intent(intent)
+    def __init__(self):
+        Selector.__init__(self, Inner.SELECTOR)
+
+class Raw(Selector):
+    SELECTOR = lambda intent: intent
+    def __init__(self):
+        Selector.__init__(self, Raw.SELECTOR)
+
+class Intent(Filter):
     def __init__(self, name):
-        self._name = name
+        Filter.__init__(self, lambda intent: intent['intent'] == name)
 
-    def __call__(self, f):
-        setattr(f, '__zoe__intent__', self._name)
-        return f
-
-class Any:
+class Any(Filter):
+    MAPPING = lambda intent: True
     def __init__(self):
-        pass
-
-    def __call__(self, f):
-        setattr(f, '__zoe__intent__any__', True)
-        return f
-
-class Raw:
-    def __init__(self):
-        pass
-
-    def __call__(self, f):
-        setattr(f, '__zoe__intent__raw__', True)
-        return f
+        Filter.__init__(self, Any.MAPPING)
 
 class Agent:
     def __init__(self, name):

@@ -4,12 +4,17 @@ setup(
     name = 'zoe-lib-python',
     version = '0.1.0',
     description = 'Python library for Zoe assistant',
+    url = 'https://github.com/guluc3m/zoe-lib-python',
     author = 'David Muñoz Díaz',
-    author_email='david@gul.es',
+    author_email = 'david@gul.es',
     license = 'MIT',
     packages = find_packages(),
     keywords = 'guluc3m zoe gul-zoe world-domination',
     install_requires = [
         'pika >= 0.10.0'
+    ],
+    test_suite = 'nose.collector',
+    tests_require = [
+        'nose'
     ]
 )
