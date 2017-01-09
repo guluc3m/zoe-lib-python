@@ -110,3 +110,23 @@ class DecoTest(TestCase):
         }
         expected = None, 'consumed'
         self.assertEqual(expected, self._run(TestAgent, incoming))
+
+    def test_two_intents(self):
+        class TestAgent:
+            @zoe.Intent('a')
+            def a(self, intent):
+                return {'data': 'ack-a'}
+            @zoe.Intent('b')
+            def b(self, intent):
+                return {'data': 'ack-b'}
+        incoming = {
+            'intent': 'c',
+            'params': {
+                'intent': 'a'
+            }
+        }
+        expected = {
+            'intent': 'c',
+            'params': {'data': 'ack-a'}
+        }
+        self.assertEqual(expected, self._run(TestAgent, incoming)[0])

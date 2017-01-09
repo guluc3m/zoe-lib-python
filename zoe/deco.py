@@ -123,15 +123,13 @@ class DecoratedAgent:
             selector = IntentDecorations.get_selector(method)
             filt = IntentDecorations.get_filter(method)
             result = selector(incoming)
-            if not filt(result):
-                return None, None
-            if result and len(result) > 0:
+            if filt(result):
                 methods.append(method)
-            if len(methods) == 0:
-                return None, None
-            if len(methods) > 1:
-                print('Too many methods')
-                return None, None
+        if len(methods) == 0:
+            return None, None
+        if len(methods) > 1:
+            print('Too many methods')
+            return None, None
         return result, methods[0]
 
 
