@@ -27,7 +27,7 @@ class RabbitMQClient:
         params.socket_timeout = 5
         self._connection = pika.BlockingConnection(params)
         self._channel = self._connection.channel()
-        self._channel.exchange_declare(exchange = self.EXCHANGE, type = 'fanout')
+        self._channel.exchange_declare(exchange = self.EXCHANGE, exchange_type = 'fanout')
 
         result = self._channel.queue_declare(exclusive = True)
         self._queue_name = result.method.queue
