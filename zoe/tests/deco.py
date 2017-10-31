@@ -167,4 +167,4 @@ class DecoTest(TestCase):
             'intent': 'b'
         }
         self.assertEqual(expected1, self._run(TestAgent, incoming)[0])
-        # self.assertEqual(expected2, self._run(TestAgent, expected1)[0])
+        self.assertEqual(expected2, self._run(TestAgent, expected1)[0])
