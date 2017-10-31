@@ -130,3 +130,41 @@ class DecoTest(TestCase):
             'params': {'data': 'ack-a'}
         }
         self.assertEqual(expected, self._run(TestAgent, incoming)[0])
+
+    def test_transform_trycatch(self):
+        class TestAgent:
+            @zoe.Intent('a')
+            def a(self, intent):
+                return { 'error': 'error' }
+            @zoe.Intent('b')
+            def b(self, intent):
+                return { 'data': 'ok' }
+            @zoe.Intent('try')
+            def tr(self, intent):
+                if 'error' in intent['try']:
+                    return intent['catch!']
+                else:
+                    return intent['try']
+        incoming = {
+            'intent': 'try',
+            'try': {
+                'intent': 'a'
+            },
+            'catch!': {
+                'intent': 'b'
+            }
+        }
+        expected1 = {
+            'intent': 'try',
+            'try': {
+                'error': 'error'
+            },
+            'catch!': {
+                'intent': 'b'
+            }
+        }
+        expected2 = {
+            'intent': 'b'
+        }
+        self.assertEqual(expected1, self._run(TestAgent, incoming)[0])
+        # self.assertEqual(expected2, self._run(TestAgent, expected1)[0])

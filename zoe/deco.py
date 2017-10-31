@@ -47,32 +47,29 @@ class RabbitMQClient:
 
 class IntentTools:
     def lookup(intent):
-        """ finds the innermost intent to solve.
+        """ finds the innermost leftmost intent to solve.
             Traverses the intent tree, accumulating all objects,
             and returns the first one that is actually an intent.
-            Yes, this can be optimized, but who cares.
         """
-        a = []
-        def traverse(intent, acc, trycatch = None):
-            if 'try' in intent:
-                traverse(intent['try'], acc, intent)
-            else:
-                keys = sorted(intent)
-                for key in keys:
-                    value = intent[key]
-                    if isinstance(value, dict):
-                        traverse(value, acc, trycatch)
-                    elif isinstance(value, list):
-                        for p in value:
-                            traverse(p, acc, trycatch)
-            acc.append((intent, trycatch))
-        traverse(intent, a)
-        for (i, t) in a:
-            if 'intent' in i or 'try' in i:
-                return (i, t)
+        keys = sorted(intent)
+        for key in keys:
+            if key[-1] == '!':
+                continue
+            value = intent[key]
+            if isinstance(value, dict):
+                res = IntentTools.lookup(value)
+                if res:
+                    return res
+            elif isinstance(value, list):
+                for p in value:
+                    res = IntentTools.lookup(p)
+                    if res:
+                        return res
+        if 'intent' in keys:
+            return intent
 
     def inner_intent(intent):
-        chosen, trycatch = IntentTools.lookup(intent)
+        chosen = IntentTools.lookup(intent)
         return chosen
 
     def substitute(old, new):

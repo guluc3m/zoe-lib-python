@@ -64,50 +64,14 @@ class IntentsTest(TestCase):
         chosen = zoe.IntentTools.inner_intent(intent)
         self.assertIs(intent['a'][0], chosen)
 
-    def test_trycatch_1(self):
+    def test_quote(self):
         intent = {
-            'try': {
+            'a!': {
                 'intent': 'a'
             },
-            'catch': {
+            'b': {
                 'intent': 'b'
             }
         }
-        chosen, trycatch = zoe.IntentTools.lookup(intent)
-        self.assertIs(intent['try'], chosen)
-        self.assertIs(intent, trycatch)
-
-    def test_trycatch_2(self):
-        intent = {
-            'try': {
-                'try': {
-                    'intent': 'a'
-                },
-                'catch': {
-                    'intent': 'b'
-                }
-            },
-            'catch': {
-                'intent': 'b'
-            }
-        }
-        chosen, trycatch = zoe.IntentTools.lookup(intent)
-        self.assertIs(intent['try']['try'], chosen)
-        self.assertIs(intent['try'], trycatch)
-
-    def test_trycatch_3(self):
-        intent = {
-            'try': {
-                'try': {
-                    'data': 'ok'
-                },
-                'catch': {
-                    'data': 'ko'
-                }
-            },
-            'catch': {
-                'intent': 'b'
-            }
-        }
-        chosen, trycatch = zoe.IntentTools.lookup(intent)
-        self.assertIs(intent['try'], chosen)
+        chosen = zoe.IntentTools.inner_intent(intent)
+        self.assertIs(intent['b'], chosen)
