@@ -46,7 +46,7 @@ class RabbitMQClient:
         self._channel.basic_publish(exchange = self.EXCHANGE, routing_key = self.ROUTING_KEY, body = msg)
 
 class IntentTools:
-    def lookup(intent):
+    def lookup(intent, parent = None):
         """ finds the innermost leftmost intent to solve.
             Traverses the intent tree, accumulating all objects,
             and returns the first one that is actually an intent.
@@ -57,20 +57,21 @@ class IntentTools:
                 continue
             value = intent[key]
             if isinstance(value, dict):
-                res = IntentTools.lookup(value)
+                res, par = IntentTools.lookup(value, intent)
                 if res:
-                    return res
+                    return res, par
             elif isinstance(value, list):
                 for p in value:
-                    res = IntentTools.lookup(p)
+                    res, par = IntentTools.lookup(p, intent)
                     if res:
-                        return res
+                        return res, par
         if 'intent' in keys:
-            return intent
+            return intent, parent
+        return None, None
 
     def inner_intent(intent):
-        chosen = IntentTools.lookup(intent)
-        return chosen
+        chosen, parent = IntentTools.lookup(intent)
+        return chosen, parent
 
     def substitute(old, new):
         """ replaces a dict's contents with the ones in another dict """
@@ -105,34 +106,43 @@ class DecoratedAgent:
 
     def dispatch(self, original):
         incoming = dict(original)
-        intent, method = self.find_method(incoming)
+        intent, parent, method = self.find_method(incoming)
         if not method:
             return None, 'ignored'
+        if not IntentDecorations.is_marked(method, Catch.MARK):
+            if 'error' in intent:
+                IntentTools.substitute(intent, {'error': intent['error']})
+                if parent != None:
+                    parent['error'] = intent['error']
+                return incoming, 'error'
         result = method(intent)
         if not result:
             return None, 'consumed'
         IntentTools.substitute(intent, result)
-        return incoming, None
+        if 'error' in result:
+            parent['error'] = result['error']
+        return incoming, 'replaced'
 
     def find_method(self, incoming):
         methods = []
         for method in self._candidates:
             selector = IntentDecorations.get_selector(method)
             filt = IntentDecorations.get_filter(method)
-            result = selector(incoming)
+            result, parent = selector(incoming)
             if filt(result):
                 methods.append(method)
         if len(methods) == 0:
-            return None, None
+            return None, None, None
         if len(methods) > 1:
             print('Too many methods')
-            return None, None
-        return result, methods[0]
+            return None, None, None
+        return result, parent, methods[0]
 
 
 class IntentDecorations:
     ATTR_SELECTOR = '__zoe__intent__selector__'
     ATTR_FILTER = '__zoe__intent__filter__'
+    ATTR_MARKS = '__zoe__intent__marks__'
     def set_selector(f, selector):
         setattr(f, IntentDecorations.ATTR_SELECTOR, selector)
 
@@ -147,6 +157,20 @@ class IntentDecorations:
 
     def get_filter(method):
         return getattr(method, IntentDecorations.ATTR_FILTER)
+
+    def add_mark(f, transform):
+        if not hasattr(f, IntentDecorations.ATTR_MARKS):
+            setattr(f, IntentDecorations.ATTR_MARKS, [])
+        getattr(f, IntentDecorations.ATTR_MARKS).append(transform)
+
+    def get_marks(method):
+        if not hasattr(method, IntentDecorations.ATTR_MARKS):
+            return []
+        return getattr(method, IntentDecorations.ATTR_MARKS)
+
+    def is_marked(method, mark):
+        marks = IntentDecorations.get_marks(method)
+        return mark in marks
 
 
 class Selector:
@@ -163,24 +187,36 @@ class Filter:
         IntentDecorations.set_filter(f, self._lam)
         return f
 
+class Mark:
+    def __init__(self, mark):
+        self._mark = mark
+    def __call__(self, f):
+        IntentDecorations.add_mark(f, self._mark)
+        return f
+
 class Inner(Selector):
     SELECTOR = lambda intent: IntentTools.inner_intent(intent)
     def __init__(self):
         Selector.__init__(self, Inner.SELECTOR)
 
 class Raw(Selector):
-    SELECTOR = lambda intent: intent
+    SELECTOR = lambda intent: (intent, None)
     def __init__(self):
         Selector.__init__(self, Raw.SELECTOR)
 
 class Intent(Filter):
     def __init__(self, name):
-        Filter.__init__(self, lambda intent: intent['intent'] == name)
+        Filter.__init__(self, lambda intent: 'intent' in intent and intent['intent'] == name)
 
 class Any(Filter):
     MAPPING = lambda intent: True
     def __init__(self):
         Filter.__init__(self, Any.MAPPING)
+
+class Catch(Mark):
+    MARK = 'Catch'
+    def __init__(self):
+        Mark.__init__(self, Catch.MARK)
 
 class Agent:
     def __init__(self, name):

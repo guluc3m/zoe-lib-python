@@ -7,7 +7,7 @@ class IntentsTest(TestCase):
         intent = {
             'intent': 'test'
         }
-        chosen = zoe.IntentTools.inner_intent(intent)
+        chosen, _ = zoe.IntentTools.inner_intent(intent)
         self.assertIs(intent, chosen)
 
     def test_one_inner(self):
@@ -17,7 +17,7 @@ class IntentsTest(TestCase):
                 'intent': 'a'
             }
         }
-        chosen = zoe.IntentTools.inner_intent(intent)
+        chosen, _ = zoe.IntentTools.inner_intent(intent)
         self.assertIs(intent['a'], chosen)
 
     def test_inner_order(self):
@@ -30,7 +30,7 @@ class IntentsTest(TestCase):
                 'intent': 'z'
             }
         }
-        chosen = zoe.IntentTools.inner_intent(intent)
+        chosen, _ = zoe.IntentTools.inner_intent(intent)
         self.assertIs(intent['a'], chosen)
 
     def test_chain(self):
@@ -46,7 +46,7 @@ class IntentsTest(TestCase):
                 }
             },
         }
-        chosen = zoe.IntentTools.inner_intent(intent)
+        chosen, _ = zoe.IntentTools.inner_intent(intent)
         self.assertIs(intent['a']['b']['c'], chosen)
 
     def test_array(self):
@@ -61,7 +61,7 @@ class IntentsTest(TestCase):
                 },
             ],
         }
-        chosen = zoe.IntentTools.inner_intent(intent)
+        chosen, _ = zoe.IntentTools.inner_intent(intent)
         self.assertIs(intent['a'][0], chosen)
 
     def test_quote(self):
@@ -73,5 +73,32 @@ class IntentsTest(TestCase):
                 'intent': 'b'
             }
         }
-        chosen = zoe.IntentTools.inner_intent(intent)
+        chosen, _ = zoe.IntentTools.inner_intent(intent)
         self.assertIs(intent['b'], chosen)
+
+    def test_parent1(self):
+        intent = {
+            'a': {
+                'intent': 'a',
+                'params': {
+                    'intent': 'b'
+                }
+            }
+        }
+        _, parent = zoe.IntentTools.inner_intent(intent)
+        self.assertIs(intent['a'], parent)
+
+    def test_parent2(self):
+        intent = {
+            'a': {
+                'intent': 'a',
+                'params': {
+                    'intent': 'b',
+                    'params': {
+                        'intent': 'c'
+                    }
+                }
+            }
+        }
+        _, parent = zoe.IntentTools.inner_intent(intent)
+        self.assertIs(intent['a']['params'], parent)
