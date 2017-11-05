@@ -11,7 +11,7 @@ setup(
     packages = find_packages(),
     keywords = 'guluc3m zoe gul-zoe world-domination',
     install_requires = [
-        'pika >= 0.10.0'
+        'kafka-python >= 1.3.5'
     ],
     test_suite = 'nose.collector',
     tests_require = [
