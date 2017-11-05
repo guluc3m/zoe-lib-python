@@ -5,45 +5,41 @@
 #
 
 import logging
-import pika
+import kafka
 import json
 import sys
 import os
 
-url = os.environ.get('RABBITMQ_URL')
-logging.getLogger("pika").setLevel(logging.WARNING)
+bootstrap = os.environ.get('KAFKA_SERVERS')
 
-class RabbitMQClient:
-    QUEUE = 'zoemessages'
-    ROUTING_KEY = 'zoemessages'
-    EXCHANGE = 'zoeexchange'
+class KafkaClient:
+    TOPIC = 'zoe'
 
-    def __init__(self, url, handler):
+    def __init__(self, url, handler, group):
         self._url = url
         self._handler = handler
+        self._group = group
 
     def run(self):
-        params = pika.URLParameters(self._url)
-        params.socket_timeout = 5
-        self._connection = pika.BlockingConnection(params)
-        self._channel = self._connection.channel()
-        self._channel.exchange_declare(exchange = self.EXCHANGE, exchange_type = 'fanout')
-
-        result = self._channel.queue_declare(exclusive = True)
-        self._queue_name = result.method.queue
-        self._channel.queue_bind(exchange = self.EXCHANGE, queue = self._queue_name)
-
-        self._channel.basic_consume(self._handler, queue = self._queue_name, no_ack = True)
-        self._channel.start_consuming()
+        print("Running!")
+        consumer = kafka.KafkaConsumer(KafkaClient.TOPIC,
+                                       bootstrap_servers=bootstrap,
+                                       group_id=self._group,
+                                       enable_auto_commit=False)
+        self._producer = kafka.KafkaProducer(bootstrap_servers=bootstrap)
+        for message in consumer:
+            self._handler(message.value.decode('utf-8'))
+            consumer.commit()
+        print("ended!")
 
     def send(self, msg):
-        if not self._channel:
+        if not self._producer:
             return
         if isinstance(msg, dict):
             msg = json.dumps(msg)
         elif not isinstance(msg, str):
             msg = str(msg)
-        self._channel.basic_publish(exchange = self.EXCHANGE, routing_key = self.ROUTING_KEY, body = msg)
+        self._producer.send(KafkaClient.TOPIC, msg.encode('ascii'))
 
 class IntentTools:
     def lookup(intent, parent = None):
@@ -91,18 +87,22 @@ class DecoratedAgent:
         if (listener):
             self._listener = listener
         else:
-            self._listener = RabbitMQClient(url, self.incoming)
+            self._listener = KafkaClient(bootstrap, self.incoming, name)
         agent.send = self._listener.send
         self._listener.run()
 
-    def incoming(self, ch, method, properties, body):
-        incoming = json.loads(body.decode('utf-8'))
-        if (len(incoming) == 0):
-            return
-        result, error = self.dispatch(incoming)
-        if not result:
-            return
-        self._listener.send(json.dumps(result))
+    def incoming(self, body):
+        try:
+            incoming = json.loads(body)
+            if (len(incoming) == 0):
+                return
+            result, error = self.dispatch(incoming)
+            if not result:
+                return
+            self._listener.send(json.dumps(result))
+        except:
+            print("Dropping message", body)
+            pass
 
     def dispatch(self, original):
         incoming = dict(original)
