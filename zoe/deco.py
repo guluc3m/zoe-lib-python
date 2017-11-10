@@ -66,6 +66,9 @@ class IntentTools:
             return intent, parent
         return None, None
 
+    def inner_intent(intent):
+        return IntentTools.lookup(intent)
+
     def matches(pattern, value):
         def matchSet(pattern, value):
             for k in pattern:
