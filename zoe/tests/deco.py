@@ -237,3 +237,73 @@ class DecoTest(TestCase):
         }
         self.assertEqual(expected1, self._run(TestAgent, incoming)[0])
         self.assertEqual(expected2, self._run(TestAgent, expected1)[0])
+
+    def test_match(self):
+        class TestAgent:
+            @zoe.Match('a', {'param1': str, 'param2': int, 'param3': {'a', 'b'}})
+            def a(self, intent):
+                return { 'ret': "%s %d %d %d" % (intent['param1'], intent['param2'], intent['param3']['a'], intent['param3']['b']) }
+        incoming = {
+            'intent': 'a',
+            'param1': 'blah',
+            'param2': 123,
+            'param3': {
+                'a': 8,
+                'b': 9
+            }
+        }
+        expected = {
+            'ret': 'blah 123 8 9'
+        }
+        self.assertEqual(expected, self._run(TestAgent, incoming)[0])
+
+    def test_invoker_inject(self):
+        class TestAgent:
+            @zoe.Any()
+            @zoe.Inject()
+            def a(self, intent, param1, param2 = 18):
+                TestAgent.PARAM1 = param1
+                TestAgent.PARAM2 = param2
+        incoming = {
+            'intent': 'a',
+            'param1': 'blah',
+            'param2': 123
+        }
+        self._run(TestAgent, incoming)[0]
+        self.assertEqual('blah', TestAgent.PARAM1)
+        self.assertEqual(123, TestAgent.PARAM2)
+
+    def test_invoker_inject_defauls(self):
+        class TestAgent:
+            @zoe.Any()
+            @zoe.Inject()
+            def a(self, intent, param1, param2 = 18):
+                TestAgent.PARAM1 = param1
+                TestAgent.PARAM2 = param2
+        incoming = {
+            'intent': 'a',
+            'param1': 'blah'
+        }
+        self._run(TestAgent, incoming)[0]
+        self.assertEqual('blah', TestAgent.PARAM1)
+        self.assertEqual(18, TestAgent.PARAM2)
+
+    def test_match_and_inject(self):
+        # nothing new, just a use case
+        class TestAgent:
+            @zoe.Inject()
+            @zoe.Match('a', {'param1': str, 'param2': {'x', 'y'}})
+            def a(self, intent, param1, param2):
+                TestAgent.PARAM1 = param1
+                TestAgent.PARAM2 = param2['x'] + param2['y']
+        incoming = {
+            'intent': 'a',
+            'param1': 'bleh',
+            'param2': {
+                'x': 9,
+                'y': 8
+            }
+        }
+        self._run(TestAgent, incoming)[0]
+        self.assertEqual('bleh', TestAgent.PARAM1)
+        self.assertEqual(17, TestAgent.PARAM2)

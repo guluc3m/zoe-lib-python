@@ -4,6 +4,7 @@
 # Licensed under MIT license - see LICENSE file
 #
 
+import inspect
 import logging
 import kafka
 import json
@@ -65,9 +66,35 @@ class IntentTools:
             return intent, parent
         return None, None
 
-    def inner_intent(intent):
-        chosen, parent = IntentTools.lookup(intent)
-        return chosen, parent
+    def matches(pattern, value):
+        def matchSet(pattern, value):
+            for k in pattern:
+                if not k in value:
+                    return False
+            return  True
+        def matchDict(pattern, value):
+            kl = sorted(pattern)
+            kr = sorted(value)
+            for l in kl:
+                if not l in kr:
+                    return False
+                vl = pattern[l]
+                vr = value[l]
+                if not IntentTools.matches(vl, vr):
+                    return False
+            return True
+
+        if pattern == "*":
+            return True
+        if pattern.__class__ == set and value.__class__ == dict:
+            return matchSet(pattern, value)
+        if pattern.__class__ == type:
+            return isinstance(value, pattern)
+        if pattern.__class__ != value.__class__:
+            return False
+        if pattern.__class__ == dict:
+            return matchDict(pattern, value)
+        return pattern == value
 
     def substitute(old, new):
         """ replaces a dict's contents with the ones in another dict """
@@ -115,7 +142,8 @@ class DecoratedAgent:
                 if parent != None:
                     parent['error'] = intent['error']
                 return incoming, 'error'
-        result = method(intent)
+        invoker = IntentDecorations.get_invoker(method)
+        result = invoker(method, intent)
         if not result:
             return None, 'consumed'
         IntentTools.substitute(intent, result)
@@ -143,6 +171,7 @@ class IntentDecorations:
     ATTR_SELECTOR = '__zoe__intent__selector__'
     ATTR_FILTER = '__zoe__intent__filter__'
     ATTR_MARKS = '__zoe__intent__marks__'
+    ATTR_INVOKER = '__zoe__intent__invoker__'
     def set_selector(f, selector):
         setattr(f, IntentDecorations.ATTR_SELECTOR, selector)
 
@@ -172,6 +201,14 @@ class IntentDecorations:
         marks = IntentDecorations.get_marks(method)
         return mark in marks
 
+    def set_invoker(f, invoker):
+        setattr(f, IntentDecorations.ATTR_INVOKER, invoker)
+
+    def get_invoker(method):
+        if hasattr(method, IntentDecorations.ATTR_INVOKER):
+            return getattr(method, IntentDecorations.ATTR_INVOKER)
+        else:
+            return SimpleInvoker.INVOKER
 
 class Selector:
     def __init__(self, lam):
@@ -194,8 +231,15 @@ class Mark:
         IntentDecorations.add_mark(f, self._mark)
         return f
 
+class Invoker:
+    def __init__(self, lam):
+        self._lam = lam
+    def __call__(self, f):
+        IntentDecorations.set_invoker(f, self._lam)
+        return f
+
 class Inner(Selector):
-    SELECTOR = lambda intent: IntentTools.inner_intent(intent)
+    SELECTOR = lambda intent: IntentTools.lookup(intent)
     def __init__(self):
         Selector.__init__(self, Inner.SELECTOR)
 
@@ -207,6 +251,40 @@ class Raw(Selector):
 class Intent(Filter):
     def __init__(self, name):
         Filter.__init__(self, lambda intent: 'intent' in intent and intent['intent'] == name)
+
+class Match(Filter):
+    def __init__(self, name, pattern):
+        Filter.__init__(self, lambda intent: 'intent' in intent and intent['intent'] == name and IntentTools.matches(pattern, intent))
+
+class SimpleInvoker(Invoker):
+    INVOKER = lambda method, intent: method(intent)
+    def __init__(self):
+        Invoker.__init__(self, SimpleInvoker.INVOKER)
+
+class Inject(Invoker):
+    INVOKER = lambda method, intent: Inject.invoke(method, intent)
+    def invoke(method, intent):
+        args, varargs, keywords, defaults = inspect.getargspec(method)
+        if defaults:
+            defaults = dict(zip(reversed(args), reversed(defaults))) # taken from http://stackoverflow.com/questions/12627118/get-a-function-arguments-default-value
+        if defaults is None:
+            defaults = {}
+        args = args[1:]
+        params = []
+        for arg in args:
+            if arg == "intent":
+                param = intent
+            elif arg in intent:
+                param = intent[arg]
+            elif arg in defaults:
+                param = defaults[arg]
+            else:
+                param = None
+            params.append(param)
+        return method(*params)
+
+    def __init__(self):
+        Invoker.__init__(self, Inject.INVOKER)
 
 class Any(Filter):
     MAPPING = lambda intent: True
