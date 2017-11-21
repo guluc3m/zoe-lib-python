@@ -2,6 +2,7 @@ from unittest import TestCase
 
 import zoe
 
+
 class PatternMatchTest(TestCase):
 
     def test_match_basic(self):
@@ -15,14 +16,14 @@ class PatternMatchTest(TestCase):
         self.assertIs(True, zoe.IntentTools.matches("*", {'a': 4}))
 
     def test_match_dict(self):
-        left = { 'a': 1 }
-        right = { 'a': 1 }
+        left = {'a': 1}
+        right = {'a': 1}
         self.assertIs(True, zoe.IntentTools.matches(left, right))
-        left = { 'a': {'b': 'c'} }
-        right = { 'a': {'b': 'c'} }
+        left = {'a': {'b': 'c'}}
+        right = {'a': {'b': 'c'}}
         self.assertIs(True, zoe.IntentTools.matches(left, right))
-        left = { 'a': {'b': 'c'} }
-        right = { 'a': {'b': 'd'} }
+        left = {'a': {'b': 'c'}}
+        right = {'a': {'b': 'd'}}
         self.assertIs(False, zoe.IntentTools.matches(left, right))
 
     def test_match_types(self):

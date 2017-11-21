@@ -2,18 +2,19 @@ from unittest import TestCase
 
 import zoe
 
+
 class DecoTest(TestCase):
 
     class FakeListener:
         def run(self):
             pass
+
         def send(self, msg):
             self.msg = msg
 
     def _run(self, klass, incoming):
         listener = DecoTest.FakeListener()
-        return zoe.DecoratedAgent('', klass(), listener = listener).dispatch(incoming)
-
+        return zoe.DecoratedAgent('', klass(), listener=listener).dispatch(incoming)
 
     def test_inner(self):
         class TestAgent:
@@ -116,6 +117,7 @@ class DecoTest(TestCase):
             @zoe.Intent('a')
             def a(self, intent):
                 return {'data': 'ack-a'}
+
             @zoe.Intent('b')
             def b(self, intent):
                 return {'data': 'ack-b'}
@@ -134,6 +136,7 @@ class DecoTest(TestCase):
     def test_no_catch(self):
         class TestAgent:
             called = False
+
             @zoe.Intent('a')
             def a(self, intent):
                 TestAgent.called = True
@@ -148,6 +151,7 @@ class DecoTest(TestCase):
     def test_catch(self):
         class TestAgent:
             called = False
+
             @zoe.Intent('a')
             @zoe.Catch()
             def a(self, intent):
@@ -164,10 +168,12 @@ class DecoTest(TestCase):
         class TestAgent:
             @zoe.Intent('a')
             def a(self, intent):
-                return { 'error': 'error' }
+                return {'error': 'error'}
+
             @zoe.Intent('b')
             def b(self, intent):
-                return { 'data': 'ok' }
+                return {'data': 'ok'}
+
             @zoe.Intent('try')
             @zoe.Catch()
             def tr(self, intent):
@@ -204,10 +210,11 @@ class DecoTest(TestCase):
         class TestAgent:
             @zoe.Intent('b')
             def b(self, intent):
-                return { 'blah': 'bleh' }
+                return {'blah': 'bleh'}
+
             @zoe.Intent('c')
             def c(self, intent):
-                return { 'error': 'error' }
+                return {'error': 'error'}
         incoming = {
             'intent': 'a',
             'param': {
@@ -242,7 +249,12 @@ class DecoTest(TestCase):
         class TestAgent:
             @zoe.Match('a', {'param1': str, 'param2': int, 'param3': {'a', 'b'}})
             def a(self, intent):
-                return { 'ret': "%s %d %d %d" % (intent['param1'], intent['param2'], intent['param3']['a'], intent['param3']['b']) }
+                return {
+                    'ret': "%s %d %d %d" % (intent['param1'],
+                                            intent['param2'],
+                                            intent['param3']['a'],
+                                            intent['param3']['b'])
+                }
         incoming = {
             'intent': 'a',
             'param1': 'blah',
@@ -261,7 +273,7 @@ class DecoTest(TestCase):
         class TestAgent:
             @zoe.Any()
             @zoe.Inject()
-            def a(self, intent, param1, param2 = 18):
+            def a(self, intent, param1, param2=18):
                 TestAgent.PARAM1 = param1
                 TestAgent.PARAM2 = param2
         incoming = {
@@ -277,7 +289,7 @@ class DecoTest(TestCase):
         class TestAgent:
             @zoe.Any()
             @zoe.Inject()
-            def a(self, intent, param1, param2 = 18):
+            def a(self, intent, param1, param2=18):
                 TestAgent.PARAM1 = param1
                 TestAgent.PARAM2 = param2
         incoming = {

@@ -13,6 +13,7 @@ import os
 
 bootstrap = os.environ.get('KAFKA_SERVERS')
 
+
 class KafkaClient:
     TOPIC = 'zoe'
 
@@ -42,8 +43,9 @@ class KafkaClient:
             msg = str(msg)
         self._producer.send(KafkaClient.TOPIC, msg.encode('ascii'))
 
+
 class IntentTools:
-    def lookup(intent, parent = None):
+    def lookup(intent, parent=None):
         """ finds the innermost leftmost intent to solve.
             Traverses the intent tree, accumulating all objects,
             and returns the first one that is actually an intent.
@@ -72,14 +74,15 @@ class IntentTools:
     def matches(pattern, value):
         def matchSet(pattern, value):
             for k in pattern:
-                if not k in value:
+                if k not in value:
                     return False
-            return  True
+            return True
+
         def matchDict(pattern, value):
             kl = sorted(pattern)
             kr = sorted(value)
             for l in kl:
-                if not l in kr:
+                if l not in kr:
                     return False
                 vl = pattern[l]
                 vr = value[l]
@@ -104,8 +107,9 @@ class IntentTools:
         old.clear()
         old.update(new)
 
+
 class DecoratedAgent:
-    def __init__(self, name, agent, listener = None):
+    def __init__(self, name, agent, listener=None):
         self._name = name
         self._agent = agent
         self._logger = logging.getLogger(name)
@@ -142,7 +146,7 @@ class DecoratedAgent:
         if not IntentDecorations.is_marked(method, Catch.MARK):
             if 'error' in intent:
                 IntentTools.substitute(intent, {'error': intent['error']})
-                if parent != None:
+                if parent is not None:
                     parent['error'] = intent['error']
                 return incoming, 'error'
         invoker = IntentDecorations.get_invoker(method)
@@ -175,6 +179,7 @@ class IntentDecorations:
     ATTR_FILTER = '__zoe__intent__filter__'
     ATTR_MARKS = '__zoe__intent__marks__'
     ATTR_INVOKER = '__zoe__intent__invoker__'
+
     def set_selector(f, selector):
         setattr(f, IntentDecorations.ATTR_SELECTOR, selector)
 
@@ -213,63 +218,83 @@ class IntentDecorations:
         else:
             return SimpleInvoker.INVOKER
 
+
 class Selector:
     def __init__(self, lam):
         self._lam = lam
+
     def __call__(self, f):
         IntentDecorations.set_selector(f, self._lam)
         return f
 
+
 class Filter:
     def __init__(self, lam):
         self._lam = lam
+
     def __call__(self, f):
         IntentDecorations.set_filter(f, self._lam)
         return f
 
+
 class Mark:
     def __init__(self, mark):
         self._mark = mark
+
     def __call__(self, f):
         IntentDecorations.add_mark(f, self._mark)
         return f
 
+
 class Invoker:
     def __init__(self, lam):
         self._lam = lam
+
     def __call__(self, f):
         IntentDecorations.set_invoker(f, self._lam)
         return f
 
+
 class Inner(Selector):
-    SELECTOR = lambda intent: IntentTools.lookup(intent)
+    def SELECTOR(intent):
+        return IntentTools.lookup(intent)
+
     def __init__(self):
         Selector.__init__(self, Inner.SELECTOR)
 
+
 class Raw(Selector):
-    SELECTOR = lambda intent: (intent, None)
+    def SELECTOR(intent):
+        return (intent, None)
+
     def __init__(self):
         Selector.__init__(self, Raw.SELECTOR)
+
 
 class Intent(Filter):
     def __init__(self, name):
         Filter.__init__(self, lambda intent: 'intent' in intent and intent['intent'] == name)
 
+
 class Match(Filter):
     def __init__(self, name, pattern):
         Filter.__init__(self, lambda intent: 'intent' in intent and intent['intent'] == name and IntentTools.matches(pattern, intent))
 
+
 class SimpleInvoker(Invoker):
     INVOKER = lambda method, intent: method(intent)
+
     def __init__(self):
         Invoker.__init__(self, SimpleInvoker.INVOKER)
 
+
 class Inject(Invoker):
     INVOKER = lambda method, intent: Inject.invoke(method, intent)
+
     def invoke(method, intent):
         args, varargs, keywords, defaults = inspect.getargspec(method)
         if defaults:
-            defaults = dict(zip(reversed(args), reversed(defaults))) # taken from http://stackoverflow.com/questions/12627118/get-a-function-arguments-default-value
+            defaults = dict(zip(reversed(args), reversed(defaults)))  # taken from http://stackoverflow.com/questions/12627118/get-a-function-arguments-default-value
         if defaults is None:
             defaults = {}
         args = args[1:]
@@ -289,15 +314,20 @@ class Inject(Invoker):
     def __init__(self):
         Invoker.__init__(self, Inject.INVOKER)
 
+
 class Any(Filter):
     MAPPING = lambda intent: True
+
     def __init__(self):
         Filter.__init__(self, Any.MAPPING)
 
+
 class Catch(Mark):
     MARK = 'Catch'
+
     def __init__(self):
         Mark.__init__(self, Catch.MARK)
+
 
 class Agent:
     def __init__(self, name):

@@ -2,6 +2,7 @@ from unittest import TestCase
 
 import zoe
 
+
 class IntentsTest(TestCase):
     def test_no_inner(self):
         intent = {
