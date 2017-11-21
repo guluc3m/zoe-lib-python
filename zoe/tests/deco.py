@@ -319,3 +319,25 @@ class DecoTest(TestCase):
         self._run(TestAgent, incoming)[0]
         self.assertEqual('bleh', TestAgent.PARAM1)
         self.assertEqual(17, TestAgent.PARAM2)
+
+    def test_multiple_intents_per_method(self):
+        class TestAgent:
+            @zoe.Intent('a')
+            @zoe.Intent('b')
+            def a(self, intent):
+                return {'data': 'ack'}
+        incoming = {
+            'intent': 'b',
+            'params': {
+                'intent': 'a'
+            }
+        }
+        expected1 = {
+            'intent': 'b',
+            'params': {'data': 'ack'}
+        }
+        expected2 = {
+            'data': 'ack'
+        }
+        self.assertEqual(expected1, self._run(TestAgent, incoming)[0])
+        self.assertEqual(expected2, self._run(TestAgent, expected1)[0])

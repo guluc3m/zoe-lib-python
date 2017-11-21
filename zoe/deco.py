@@ -162,10 +162,11 @@ class DecoratedAgent:
         methods = []
         for method in self._candidates:
             selector = IntentDecorations.get_selector(method)
-            filt = IntentDecorations.get_filter(method)
+            filts = IntentDecorations.get_filters(method)
             result, parent = selector(incoming)
-            if filt(result):
-                methods.append(method)
+            for filt in filts:
+                if filt(result):
+                    methods.append(method)
         if len(methods) == 0:
             return None, None, None
         if len(methods) > 1:
@@ -189,10 +190,12 @@ class IntentDecorations:
         else:
             return Inner.SELECTOR
 
-    def set_filter(f, filter):
-        setattr(f, IntentDecorations.ATTR_FILTER, filter)
+    def add_filter(f, filt):
+        if not hasattr(f, IntentDecorations.ATTR_FILTER):
+            setattr(f, IntentDecorations.ATTR_FILTER, [])
+        getattr(f, IntentDecorations.ATTR_FILTER).append(filt)
 
-    def get_filter(method):
+    def get_filters(method):
         return getattr(method, IntentDecorations.ATTR_FILTER)
 
     def add_mark(f, transform):
@@ -233,7 +236,7 @@ class Filter:
         self._lam = lam
 
     def __call__(self, f):
-        IntentDecorations.set_filter(f, self._lam)
+        IntentDecorations.add_filter(f, self._lam)
         return f
 
 
