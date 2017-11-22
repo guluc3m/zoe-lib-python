@@ -1,6 +1,7 @@
 from unittest import TestCase
 
 import zoe
+import re
 
 
 class PatternMatchTest(TestCase):
@@ -29,3 +30,7 @@ class PatternMatchTest(TestCase):
     def test_match_types(self):
         self.assertTrue(zoe.IntentTools.matches(str, 'a'))
         self.assertTrue( zoe.IntentTools.matches({'a': {'b': str}}, {'a': {'b': 'c'}}))
+
+    def test_match_regex(self):
+        self.assertTrue(zoe.IntentTools.matches(re.compile('hello.*'), 'hello, world'))
+        self.assertFalse(zoe.IntentTools.matches(re.compile('hello.*'), 'blah'))

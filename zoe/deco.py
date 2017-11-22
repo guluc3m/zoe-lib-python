@@ -10,6 +10,7 @@ import kafka
 import json
 import sys
 import os
+import re
 
 bootstrap = os.environ.get('KAFKA_SERVERS')
 
@@ -96,6 +97,8 @@ class IntentTools:
             return matchSet(pattern, value)
         if pattern.__class__ == type:
             return isinstance(value, pattern)
+        if hasattr(pattern, 'fullmatch'):
+            return bool(pattern.fullmatch(value))
         if pattern.__class__ != value.__class__:
             return False
         if pattern.__class__ == dict:
@@ -258,17 +261,50 @@ class Invoker:
         return f
 
 
+class Analyze:
+    def __init__(self, definition):
+        self._regex = re.compile(definition)
+
+    def invoke(method, intent, regex):
+        matches = list(regex.fullmatch(intent['text']).groups())
+        args, varargs, keywords, defaults = inspect.getargspec(method)
+        args = args[1:]
+        params = []
+        for arg in args:
+            if arg == "intent":
+                param = intent
+            else:
+                try:
+                    param = matches.pop(0)
+                except:
+                    raise Exception('Arguments and captures do not match!')
+            params.append(param)
+        return method(*params)
+
+    def __call__(self, f):
+        IntentDecorations.add_filter(f, lambda intent: IntentTools.matches({
+            'intent': 'natural.analyze',
+            'text': self._regex
+        }, intent))
+        IntentDecorations.set_invoker(f, lambda method, intent: Analyze.invoke(method, intent, self._regex))
+        return f
+
+    def intent(what):
+        return {
+            'intent': 'natural.analyze',
+            'text': what
+        }
+
+
 class Inner(Selector):
-    def SELECTOR(intent):
-        return IntentTools.lookup(intent)
+    SELECTOR = lambda intent: IntentTools.lookup(intent)
 
     def __init__(self):
         Selector.__init__(self, Inner.SELECTOR)
 
 
 class Raw(Selector):
-    def SELECTOR(intent):
-        return (intent, None)
+    SELECTOR = lambda intent: (intent, None)
 
     def __init__(self):
         Selector.__init__(self, Raw.SELECTOR)
@@ -276,12 +312,15 @@ class Raw(Selector):
 
 class Intent(Filter):
     def __init__(self, name):
-        Filter.__init__(self, lambda intent: 'intent' in intent and intent['intent'] == name)
+        Filter.__init__(self, lambda intent: 'intent' in intent and
+                                             intent['intent'] == name)
 
 
 class Match(Filter):
     def __init__(self, name, pattern):
-        Filter.__init__(self, lambda intent: 'intent' in intent and intent['intent'] == name and IntentTools.matches(pattern, intent))
+        Filter.__init__(self, lambda intent: 'intent' in intent and
+                                             intent['intent'] == name and
+                                             IntentTools.matches(pattern, intent))
 
 
 class SimpleInvoker(Invoker):

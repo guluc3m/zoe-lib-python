@@ -341,3 +341,82 @@ class DecoTest(TestCase):
         }
         self.assertEqual(expected1, self._run(TestAgent, incoming)[0])
         self.assertEqual(expected2, self._run(TestAgent, expected1)[0])
+
+    def test_analyzer(self):
+        class TestAgent:
+            @zoe.Analyze('hello, ([a-z]+)')
+            def a(self, intent, world):
+                return {'data': world}
+        incoming = {
+            'intent': 'natural.analyze',
+            'text': 'hello, world'
+        }
+        expected = {'data': 'world'}
+        self.assertEqual(expected, self._run(TestAgent, incoming)[0])
+
+    def test_analyzer_2(self):
+        class TestAgent:
+            @zoe.Analyze('action<send> (objective<.+>) .* (object<.*>)')
+            def send(self, destination, what):
+                return {
+                    'intent': 'email.send',
+                    'recipient': zoe.Analyze.intent(destination),
+                    'payload': zoe.Analyze.intent(what)
+                }
+
+            @zoe.Analyze('objective<(.+)>')
+            def objective(self, name):
+                return {
+                    'data': 'user',
+                    'name': name,
+                    'email': '%s@%s.com' % (name.lower(), name.lower())
+                }
+
+            @zoe.Analyze('object<email saying (.+)>')
+            def email(self, content):
+                return {
+                    'data': 'email',
+                    'content': content
+                }
+
+        incoming = {
+            'intent': 'natural.analyze',
+            'text': 'action<send> objective<David> an object<email saying hello>'
+        }
+        expected1 = {
+            'intent': 'email.send',
+            'recipient': {
+                'intent': 'natural.analyze',
+                'text': 'objective<David>'
+            },
+            'payload': {
+                'intent': 'natural.analyze',
+                'text': 'object<email saying hello>'
+            }
+        }
+        expected2 = {
+            'intent': 'email.send',
+            'recipient': {
+                'intent': 'natural.analyze',
+                'text': 'objective<David>'
+            },
+            'payload': {
+                'data': 'email',
+                'content': 'hello'
+            }
+        }
+        expected3 = {
+            'intent': 'email.send',
+            'recipient': {
+                'data': 'user',
+                'name': 'David',
+                'email': 'david@david.com'
+            },
+            'payload': {
+                'data': 'email',
+                'content': 'hello'
+            }
+        }
+        self.assertEqual(expected1, self._run(TestAgent, incoming)[0])
+        self.assertEqual(expected2, self._run(TestAgent, expected1)[0])
+        self.assertEqual(expected3, self._run(TestAgent, expected2)[0])
