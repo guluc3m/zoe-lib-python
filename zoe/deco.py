@@ -51,22 +51,22 @@ class IntentTools:
             Traverses the intent tree, accumulating all objects,
             and returns the first one that is actually an intent.
         """
-        keys = sorted(intent)
-        for key in keys:
-            if key[-1] == '!':
-                continue
-            value = intent[key]
-            if isinstance(value, dict):
+        if isinstance(intent, dict):
+            keys = sorted(intent)
+            for key in keys:
+                if key[-1] == '!':
+                    continue
+                value = intent[key]
                 res, par = IntentTools.lookup(value, intent)
                 if res:
                     return res, par
-            elif isinstance(value, list):
-                for p in value:
-                    res, par = IntentTools.lookup(p, intent)
-                    if res:
-                        return res, par
-        if 'intent' in keys:
-            return intent, parent
+            if 'intent' in keys:
+                return intent, parent
+        elif isinstance(intent, list):
+            for value in intent:
+                res, par = IntentTools.lookup(value, intent)
+                if res:
+                    return res, par
         return None, None
 
     def inner_intent(intent):
