@@ -42,7 +42,7 @@ class KafkaClient:
             msg = json.dumps(msg)
         elif not isinstance(msg, str):
             msg = str(msg)
-        self._producer.send(KafkaClient.TOPIC, msg.encode('utf-8'))
+        self._producer.send(KafkaClient.TOPIC, msg.encode('ascii'))
 
 
 class IntentTools:
@@ -139,7 +139,6 @@ class DecoratedAgent:
             self._listener.send(json.dumps(result))
         except:
             print("Dropping message", body)
-            print("Unexpected error:", sys.exc_info()[0])
             pass
 
     def dispatch(self, original):
