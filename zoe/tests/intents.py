@@ -73,6 +73,14 @@ class IntentsTest(TestCase):
         chosen, _ = zoe.IntentTools.lookup(intent)
         self.assertIs(intent, chosen)
 
+    def test_array3(self):
+        intent = {
+            'intent': 'test',
+            'a': [['b']]
+        }
+        chosen, _ = zoe.IntentTools.lookup(intent)
+        self.assertIs(intent, chosen)
+
     def test_quote(self):
         intent = {
             'a!': {

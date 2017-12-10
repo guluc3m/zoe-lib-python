@@ -4,7 +4,7 @@ setup(
     name = 'zoe-lib-python',
     version = '0.1.0',
     description = 'Python library for Zoe assistant',
-    url = 'https://github.com/guluc3m/zoe-lib-python',
+    url = 'https://github.com/Patataman/zoe-lib-debug.git',
     author = 'David Muñoz Díaz',
     author_email = 'david@gul.es',
     license = 'MIT',
