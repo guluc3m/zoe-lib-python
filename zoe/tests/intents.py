@@ -119,3 +119,44 @@ class IntentsTest(TestCase):
         }
         _, parent = zoe.IntentTools.lookup(intent)
         self.assertIs(intent['a']['params'], parent)
+
+    def test_parent3(self):
+        intent = {
+            'intent': 'a',
+            'a': [
+                {
+                    'intent': 'b',
+                }
+            ]
+        }
+        _, parent = zoe.IntentTools.lookup(intent)
+        self.assertIs(intent, parent)
+
+    def test_parent4(self):
+        intent = {
+            'intent': 'a',
+            'a': [
+                [
+                    {
+                        'intent': ''
+                    }
+                ]
+            ]
+        }
+        _, parent = zoe.IntentTools.lookup(intent)
+        self.assertIs(intent, parent)
+
+    def test_parent4(self):
+        intent = {
+            'intent': 'a',
+            'a': [
+                [
+                    { 'a': {
+                            'intent': ''
+                        }
+                    }
+                ]
+            ]
+        }
+        _, parent = zoe.IntentTools.lookup(intent)
+        self.assertIs(intent, parent)

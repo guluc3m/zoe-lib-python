@@ -48,8 +48,8 @@ class KafkaClient:
 class IntentTools:
     def lookup(intent, parent=None):
         """ finds the innermost leftmost intent to solve.
-            Traverses the intent tree, accumulating all objects,
-            and returns the first one that is actually an intent.
+            Traverses the intent tree, returning the first
+            one that is actually an intent and its parent intent.
         """
         if isinstance(intent, dict):
             keys = sorted(intent)
@@ -57,14 +57,14 @@ class IntentTools:
                 if key[-1] == '!':
                     continue
                 value = intent[key]
-                res, par = IntentTools.lookup(value, intent)
+                res, par = IntentTools.lookup(value, intent if 'intent' in intent else parent)
                 if res:
                     return res, par
             if 'intent' in keys:
                 return intent, parent
         elif isinstance(intent, list):
             for value in intent:
-                res, par = IntentTools.lookup(value, intent)
+                res, par = IntentTools.lookup(value, parent)
                 if res:
                     return res, par
         return None, None

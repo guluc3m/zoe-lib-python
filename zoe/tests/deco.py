@@ -245,6 +245,56 @@ class DecoTest(TestCase):
         self.assertEqual(expected1, self._run(TestAgent, incoming)[0])
         self.assertEqual(expected2, self._run(TestAgent, expected1)[0])
 
+    def test_error_in_parent2(self):
+        class TestAgent:
+            @zoe.Intent('c')
+            def c(self, intent):
+                return {'error': 'error'}
+        incoming = {
+            'intent': 'a',
+            'param': {
+                'param': {
+                    'intent': 'c',
+                    'param': 'blah'
+                }
+            }
+        }
+        expected1 = {
+            'intent': 'a',
+            'param': {
+                'param': {
+                    'error': 'error'
+                }
+            },
+            'error': 'error'
+        }
+        self.assertEqual(expected1, self._run(TestAgent, incoming)[0])
+
+    def test_error_in_parent3(self):
+        class TestAgent:
+            @zoe.Intent('c')
+            def c(self, intent):
+                return {'error': 'error'}
+        incoming = {
+            'intent': 'a',
+            'param': {
+                'param': [{
+                    'intent': 'c',
+                    'param': 'blah'
+                }]
+            }
+        }
+        expected1 = {
+            'intent': 'a',
+            'param': {
+                'param': [{
+                    'error': 'error'
+                }]
+            },
+            'error': 'error'
+        }
+        self.assertEqual(expected1, self._run(TestAgent, incoming)[0])
+
     def test_match(self):
         class TestAgent:
             @zoe.Match('a', {'param1': str, 'param2': int, 'param3': {'a', 'b'}})
