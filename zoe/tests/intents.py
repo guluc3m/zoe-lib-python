@@ -146,7 +146,7 @@ class IntentsTest(TestCase):
         _, parent = zoe.IntentTools.lookup(intent)
         self.assertIs(intent, parent)
 
-    def test_parent4(self):
+    def test_parent5(self):
         intent = {
             'intent': 'a',
             'a': [
