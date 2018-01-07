@@ -164,6 +164,91 @@ class DecoTest(TestCase):
         self._run(TestAgent, incoming)
         self.assertTrue(TestAgent.called)
 
+    def test_catch2(self):
+        class TestAgent:
+            acalled = False
+            bcalled = False
+
+            @zoe.Intent('a')
+            @zoe.Catch()
+            def a(self, intent):
+                TestAgent.acalled = True
+
+            @zoe.Intent('b')
+            def b(self, intent):
+                TestAgent.bcalled = True
+                return {'blip': 'blop'}
+
+            @zoe.Intent('c')
+            def c(self, intent):
+                return {'error': 'error'}
+
+        incoming = {
+            'intent': 'a',
+            'a': {
+                'intent': 'b',
+                'b': {
+                    'intent': 'c'
+                }
+            }
+        }
+        expected1 = {
+            'intent': 'a',
+            'a': {
+                'intent': 'b',
+                'b': {
+                    'error': 'error'
+                },
+                'error': 'error'
+            }
+        }
+        expected2 = {
+            'intent': 'a',
+            'a': {
+                'error': 'error'
+            },
+            'error': 'error'
+        }
+        self.assertEqual(expected1, self._run(TestAgent, incoming)[0])
+        self.assertEqual(expected2, self._run(TestAgent, expected1)[0])
+        self.assertFalse(TestAgent.bcalled)
+        self._run(TestAgent, expected2)
+        self.assertTrue(TestAgent.acalled)
+
+    def test_catch3(self):
+        class TestAgent:
+            acalled = False
+
+            @zoe.Intent('a')
+            @zoe.Catch()
+            def a(self, intent):
+                TestAgent.acalled = True
+
+            @zoe.Intent('c')
+            def c(self, intent):
+                return {'error': 'error'}
+
+        incoming = {
+            'intent': 'a',
+            'a': {
+                'b': {
+                    'intent': 'c'
+                }
+            }
+        }
+        expected = {
+            'intent': 'a',
+            'a': {
+                'b': {
+                    'error': 'error'
+                }
+            },
+            'error': 'error'
+        }
+        self.assertEqual(expected, self._run(TestAgent, incoming)[0])
+        self._run(TestAgent, expected)
+        self.assertTrue(TestAgent.acalled)
+
     def test_transform_trycatch(self):
         class TestAgent:
             @zoe.Intent('a')
