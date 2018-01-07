@@ -12,18 +12,148 @@ import sys
 import os
 import re
 
+""" Contains the reference implementation of the Zoe language
+and some tools to implenent agents.
+
+
+Running an agent
+----------------
+
+This implementation is based in decorators. An agent is written like:
+
+    @Agent('Whatever')
+    class MyAgent:
+        ...
+
+The @Agent decorator connects to the bus and waits for incoming messages.
+
+
+Dispatching intents
+-------------------
+
+In order to implement an intent, define a method decorated with @Intent:
+
+    @Agent('Whatever')
+    class MyAgent:
+
+        @Intent('sayHello')
+        def something(self, intent):
+            ...
+
+When the agent is launched and an intent with that name has to be dispatched,
+this method is invoked. If it does not return anything, the intent is assumed to
+have been consumed. If it returns something, it is considered as the intent
+response:
+
+    @Agent('Whatever')
+    class MyAgent:
+
+        @Intent('sayHello')
+        def something(self, intent):
+            return {'data':'string', 'value': 'Hello!'}
+
+Intent data can be automatically injected as parameters with the @Inject decorator:
+
+    @Agent('Whatever')
+    class MyAgent:
+
+        @Intent('sayHello')
+        @Inject()
+        def something(self, intent, name, age=30):
+            # `intent` will contain the entire intent object
+            # `name` will contain `intent['name']`
+            # `age` will contain `intent['age']` or 30 if `intent['age']` is missing
+
+A convenient way of validating incoming intents structure is using the @Match decorator:
+
+    @Agent('Whatever')
+    class MyAgent:
+
+        @Match('sayHello', {'name': str, 'credentials': {'username', 'password'}})
+        @Inject()
+        def something(self, name, credentials, age=30):
+            # The intent contains a `name` (with a str value) and `credentials` (with a dict value)
+            # The `credentials` value contains a `username` and `password`, with unknown types
+
+Refer to the `patternmatch` tests to learn more about patterns.
+
+Instead of a specific intent, an agent can be interested in any message. In this
+case, decorate the dispatcher with @Any.
+
+    @Agent('Whatever')
+    class MyAgent:
+
+        @Any()
+        def something(self, intent):
+            # Will receive all intents.
+
+If a dispatcher is decorated with @Raw, the entire intent tree is received. Use
+with caution.
+
+    @Agent('Whatever')
+    class MyAgent:
+
+        @Any()
+        @Raw()
+        def something(self, intent):
+            # here, all root intents are captured
+
+When an error occurs, the dispatcher method should return an error object:
+
+    @Agent('Whatever')
+    class MyAgent:
+
+        @Intent('sayHello')
+        def something(self, intent):
+            return {'error': 'something-terrible-happened', ... }
+
+
+Error handling
+--------------
+
+Errors are automatically propagated through the intent tree unless a dispatcher
+is decorted with @Catch. In this case, if an intent receives an error from a
+sub-intent, it will be explicitly handled by the dispatcher method:
+
+    @Agent('Whatever')
+    class MyAgent:
+
+        @Intent('sayHello')
+        @Catch()
+        def something(self, intent):
+            if 'error' in intent:
+                # error handling
+            else:
+                return ...
+
+
+NOTE: right now, errors are handled manually in the dispatcher. It would be
+great to map exceptions to errors.
+
+"""
+
 bootstrap = os.environ.get('KAFKA_SERVERS')
 
-
 class KafkaClient:
+    """ A simple Kafka consumer/producer """
+
     TOPIC = 'zoe'
+    """ All messages are sent to this topic.
+    There is room for optimizations here, but let's keep it simple for now
+    """
 
     def __init__(self, url, handler, group):
+        """ Creates a client
+        :param str url: The Kafka URL.
+        :param handler: The incoming message handler function.
+        :param str group: The consumer group name.
+        """
         self._url = url
         self._handler = handler
         self._group = group
 
     def run(self):
+        """ Starts consuming messages """
         print("Running!")
         consumer = kafka.KafkaConsumer(KafkaClient.TOPIC,
                                        bootstrap_servers=bootstrap,
@@ -36,6 +166,7 @@ class KafkaClient:
         print("ended!")
 
     def send(self, msg):
+        """ Send a message to Kafka """
         if not self._producer:
             return
         if isinstance(msg, dict):
@@ -46,8 +177,10 @@ class KafkaClient:
 
 
 class IntentTools:
+    """ Contains the intent resolution algorithm """
+
     def lookup(intent, parent=None):
-        """ finds the innermost leftmost intent to solve.
+        """ Finds the innermost leftmost intent to solve.
             Traverses the intent tree, returning the first
             one that is actually an intent and its parent intent.
         """
@@ -70,9 +203,13 @@ class IntentTools:
         return None, None
 
     def inner_intent(intent):
+        """ Just an alias """
         return IntentTools.lookup(intent)
 
     def matches(pattern, value):
+        """ Checks for structural matching between a value and a pattern.
+        This is used for intent pattern matching. See the 'patternmatch' tests.
+        """
         def matchSet(pattern, value):
             for k in pattern:
                 if k not in value:
@@ -112,6 +249,17 @@ class IntentTools:
 
 
 class DecoratedAgent:
+    """ The Agent decorator implementation.
+
+    Methods in an agent are decorated with @Intent, @Raw, etc.
+    There are three basic kinds of decorators: Selector, Filter and
+    Invoker.
+
+      - Selector: extracts an intent from an intent tree
+      - Filter: decides if an intent should be analyzed
+      - Invoker: invokes the dispatcher method
+    """
+
     def __init__(self, name, agent, listener=None):
         self._name = name
         self._agent = agent
@@ -126,9 +274,13 @@ class DecoratedAgent:
         else:
             self._listener = KafkaClient(bootstrap, self.incoming, name)
         agent.send = self._listener.send
+        # It is not a good practice to do complex logic in a constructor
+        # but we want the agent to be launched when the agent is defined
+        # and not after a '.run()' call or something similar.
         self._listener.run()
 
     def incoming(self, body):
+        """ Invoked when an incoming message arrives """
         try:
             incoming = json.loads(body)
             if (len(incoming) == 0):
@@ -142,6 +294,8 @@ class DecoratedAgent:
             pass
 
     def dispatch(self, original):
+        """ Invokes a dispatcher method that fits the incoming intent,
+        handling errors and outputs. """
         incoming = dict(original)
         intent, parent, method = self.find_method(incoming)
         if not method:
@@ -162,6 +316,7 @@ class DecoratedAgent:
         return incoming, 'replaced'
 
     def find_method(self, incoming):
+        """ Finds a dispatcher method for an incoming intent """
         methods = []
         for method in self._candidates:
             selector = IntentDecorations.get_selector(method)
@@ -179,6 +334,8 @@ class DecoratedAgent:
 
 
 class IntentDecorations:
+    """ Helper methods to get/set selectors, filters, etc. """
+
     ATTR_SELECTOR = '__zoe__intent__selector__'
     ATTR_FILTER = '__zoe__intent__filter__'
     ATTR_MARKS = '__zoe__intent__marks__'
@@ -226,6 +383,8 @@ class IntentDecorations:
 
 
 class Selector:
+    """ Decides which intent from an intent tree should be analyzed """
+
     def __init__(self, lam):
         self._lam = lam
 
@@ -235,6 +394,8 @@ class Selector:
 
 
 class Filter:
+    """ Decides if an intent should be analyzed """
+
     def __init__(self, lam):
         self._lam = lam
 
@@ -244,6 +405,8 @@ class Filter:
 
 
 class Mark:
+    """ Dispatcher metadata """
+
     def __init__(self, mark):
         self._mark = mark
 
@@ -253,6 +416,8 @@ class Mark:
 
 
 class Invoker:
+    """ Implements the dispatcher invocation strategy. """
+
     def __init__(self, lam):
         self._lam = lam
 
@@ -262,6 +427,11 @@ class Invoker:
 
 
 class Analyze:
+    """ A specific decorator for NLP analysis.
+
+    This is work in progress...
+    """
+
     def __init__(self, definition):
         self._regex = re.compile(definition)
 
@@ -297,6 +467,10 @@ class Analyze:
 
 
 class Inner(Selector):
+    """ Selects the innermost leftmost intent.
+
+    This is the default selector."""
+
     SELECTOR = lambda intent: IntentTools.lookup(intent)
 
     def __init__(self):
@@ -304,6 +478,8 @@ class Inner(Selector):
 
 
 class Raw(Selector):
+    """ Selects the entire intent tree. """
+
     SELECTOR = lambda intent: (intent, None)
 
     def __init__(self):
@@ -311,12 +487,16 @@ class Raw(Selector):
 
 
 class Intent(Filter):
+    """ Filters an intent with a given name. """
+
     def __init__(self, name):
         Filter.__init__(self, lambda intent: 'intent' in intent and
                                              intent['intent'] == name)
 
 
 class Match(Filter):
+    """ Filters an intent with a given name and structure. """
+
     def __init__(self, name, pattern):
         Filter.__init__(self, lambda intent: 'intent' in intent and
                                              intent['intent'] == name and
@@ -324,6 +504,10 @@ class Match(Filter):
 
 
 class SimpleInvoker(Invoker):
+    """ Invokes a dispatcher passing the entire intent as the only parameter.
+
+    This is the default invoker."""
+
     INVOKER = lambda method, intent: method(intent)
 
     def __init__(self):
@@ -331,6 +515,8 @@ class SimpleInvoker(Invoker):
 
 
 class Inject(Invoker):
+    """ Invokes a dispatcher mapping its arguments to intent values. """
+
     INVOKER = lambda method, intent: Inject.invoke(method, intent)
 
     def invoke(method, intent):
@@ -358,6 +544,8 @@ class Inject(Invoker):
 
 
 class Any(Filter):
+    """ Filters all intents. """
+
     MAPPING = lambda intent: True
 
     def __init__(self):
@@ -365,6 +553,8 @@ class Any(Filter):
 
 
 class Catch(Mark):
+    """ Avoids automatic error handling. """
+
     MARK = 'Catch'
 
     def __init__(self):
@@ -372,6 +562,8 @@ class Catch(Mark):
 
 
 class Agent:
+    """ Decorates a class as a Zoe agent. """
+
     def __init__(self, name):
         self._name = name
 
