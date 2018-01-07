@@ -13,7 +13,7 @@ import os
 import re
 
 """ Contains the reference implementation of the Zoe language
-and some tools to implenent agents.
+and some tools to implement agents.
 
 
 Running an agent
