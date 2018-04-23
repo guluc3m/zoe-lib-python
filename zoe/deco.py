@@ -290,7 +290,7 @@ class DecoratedAgent:
                 return
             self._listener.send(json.dumps(result))
         except:
-            print("Dropping message", body)
+            # print("Dropping message", body)
             pass
 
     def dispatch(self, original):
