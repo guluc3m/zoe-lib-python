@@ -567,5 +567,5 @@ class Agent:
         self._name = name
         self.agent = DecoratedAgent(self._name, self)
 
-    def __call__(self):
+    def __call__(self, i=None):
         self.agent.run()
