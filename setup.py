@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = 'zoe-lib-python',
-    version = '0.1.1',
+    version = '0.1.0',
     description = 'Python library for Zoe assistant',
     url = 'https://github.com/guluc3m/zoe-lib-python',
     author = 'David Muñoz Díaz',

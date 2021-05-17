@@ -274,8 +274,9 @@ class DecoratedAgent:
         else:
             self._listener = KafkaClient(bootstrap, self.incoming, name)
         agent.send = self._listener.send
-
-    def run(self):
+        # It is not a good practice to do complex logic in a constructor
+        # but we want the agent to be launched when the agent is defined
+        # and not after a '.run()' call or something similar.
         self._listener.run()
 
     def incoming(self, body):
@@ -565,7 +566,6 @@ class Agent:
 
     def __init__(self, name):
         self._name = name
-        self.agent = DecoratedAgent(self._name, self)
 
-    def __call__(self):
-        self.agent.run()
+    def __call__(self, i):
+        DecoratedAgent(self._name, i())
